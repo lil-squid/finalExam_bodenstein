@@ -183,6 +183,14 @@ plot(weight~height,dat=poke_dat2,col = poke_dat2$col, pch=16, main = 'Pokemon We
 #this plot let's us focus in on the majority of the data points 
 
 
+
+
+
+
+
+
+
+
 ```
 
 
