@@ -1,0 +1,345 @@
+---
+title: "Final Exam"
+author: "Sarah Bodenstein"
+date: 12/12/20
+output: pdf_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+
+
+
+### What does it mean to do reproducible research? Why is reproducibility important to the process of science? (5 pts)
+
+Reproducible research is research where another person could duplicate the results of the study, using the same methods, given the raw data. For example, if a student were to give their raw data and statistical analysis (including code for how the analysis was done) to their professor, the professor should be able to get the same results as the students using the data and analytical methods. Furthermore, the student's code would run on the professor's computer with no errors and the professor could understand exactly what the student did for every step in the analysis. To be thorough, reproducible research should at minimum include the experimental methods (including descriptions of how data was measured), the raw data, the data used for analysis (if different) with description of how the raw data was changed, the analysis software (including version and external packages needed), the code, and the final results.
+
+Reproducibility is important to the process of science because science is supposed to be open, meaning everyone should be able to understand exactly how and why an experiment was conducted. This allows science to be peer-reviewed and potentially corrected if mistakes were made. There is many mistakes a scientist can make when conducting an experiment such as, not controlling for bias when generating the hypothesis, creating a study design with low statistical power, collecting poor quality data, seeing patterns in random data, p-hacking (misreporting the true effect sizes) when analyzing the data, and hind-sight bias when drawing conclusions. Reproducible research helps to avoid incorrect results and holds scientists accountable. Additionally, reproducibility allows studies to build on the results of previous studies with confidence and achieve further results. Finally, reproducible code allows people who would otherwise not be able to create that code use it in their own research, benefiting the larger scientific community. 
+
+
+
+
+
+
+
+
+###  Using the data on red wine quality, develop a predictive model of red wine quality. Format the model in a way that it works well with the `predict` function in `R`. You will be assessed on the model structure mostly, but 5 of the 10 points will be on if the model can outperform a naive baseline (10 pts)
+
+
+
+```{r}
+
+dat_train <- read.csv('redWineTrain.csv')
+dat_test <- read.csv('redWineTest.csv')
+
+base_mod<-glm(quality ~ ., data=dat_train) #base model using all the variables 
+summary(base_mod)
+preds_base<-predict.glm(base_mod, dat_test) #predictions using base model
+
+
+better_mod<-glm(quality ~ fixed.acidity + volatile.acidity + citric.acid + residual.sugar  + 
+                  chlorides + sulphates + alcohol + total.sulfur.dioxide,
+                data=dat_train) #better model removing some non-signif variables 
+summary(better_mod)
+preds_better<-predict.glm(better_mod, dat_test) #predictions using better model
+
+preds<-preds_base #change between preds_base and preds_better
+actual<- dat_test$quality
+getRootMean <- function(preds, actual){  #calculating root mean square deviation 
+  rt<-sqrt(mean((preds-actual)^2))
+  return(rt)
+  }
+
+getRootMean(preds,actual)
+
+rt_base<-getRootMean(preds,actual) #root mean square deviation of 0.6262011
+rt_better<-getRootMean(preds,actual)#root mean square deviation of 0.6235535
+
+```
+
+The better model (called better_mod) outperforms the base model. This can be seen in it's lower root mean square deviation (0.624 compared to 0.626). 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### Pull data from an API of your choice (not Open Library), manipulate it in any way you choose, and create the most interesting and clear figure you can. (15 pts)
+
+(See https://rapidapi.com/blog/most-popular-api/ for a list of APIs)
+
+```{r}
+library(httr)
+library(jsonlite)
+library(plyr)
+library(dplyr)
+library(tibble)
+
+name='mudkip'
+getPokemonWeight<- function(name){#function to get weight of a pokemon using name 
+name<-as.character(name) 
+
+pokemon_web <- httr::GET(paste('https://pokeapi.co/api/v2/pokemon/',name,sep=''))
+
+pokemon_web <- httr::content(pokemon_web, as='text')
+
+pokemon_df <- fromJSON(pokemon_web, simplifyDataFrame = T, flatten = T)
+
+return(pokemon_df$weight)
+
+}
+getPokemonWeight(name)
+
+
+
+
+getPokemonHeight<- function(name){#function to get height of a pokemon using name 
+name<-as.character(name)
+
+pokemon_web <- httr::GET(paste('https://pokeapi.co/api/v2/pokemon/',name,sep=''))
+
+pokemon_web <- httr::content(pokemon_web, as='text')
+
+pokemon_df <- fromJSON(pokemon_web, simplifyDataFrame = T, flatten = T)
+
+return(pokemon_df$height)
+
+}
+getPokemonHeight(name)
+
+
+
+generation<-1
+getPokemonGen<- function(generation){ #function to get a data frame listing all pokemon in a generation
+
+#name<-as.character(name)
+
+pokemon_web <- httr::GET(paste('https://pokeapi.co/api/v2/generation/',generation,sep=''))
+
+pokemon_web <- httr::content(pokemon_web, as='text')
+
+pokemon_df <- fromJSON(pokemon_web, simplifyDataFrame = T, flatten = T)
+
+return(pokemon_df$pokemon_species[1])
+
+}
+gen_names<-as.data.frame(getPokemonGen(generation))
+
+
+
+
+#function to take all the pokemon in a generation and get height and weight for each pokemon 
+#then put that data together in one table 
+getPokemonTable<- function(gen_names){ 
+  pokeTable<-list()
+  for (q in 1:nrow(gen_names)) {
+    pokeTable[[q]]<-getPokemonWeight(gen_names[q,])
+  }
+  names(pokeTable)<-gen_names[1:nrow(gen_names),]
+  pokeTable<-ldply(pokeTable, data.frame)
+  colnames(pokeTable)<-c('name','weight')
+  mortTable <- as_tibble(pokeTable)
+  
+  heightTable<-list()
+  for (q in 1:nrow(gen_names)) {
+    heightTable[[q]]<-getPokemonHeight(gen_names[q,])
+  }
+  names(heightTable)<-gen_names[1:nrow(gen_names),]
+  heightTable<-ldply(heightTable, data.frame)
+  names(heightTable)<-c('name','height')
+  pokeTable <- pokeTable %>% add_column(heightTable[2])
+  
+  return(pokeTable)
+  
+}
+
+poke_dat<-getPokemonTable(gen_names)
+
+#generate a continuous color palette of red to blue 
+col_spectrum <- colorRampPalette(c('red','blue'))
+#add a column of color values based on the weight values
+poke_dat$col <- col_spectrum(10)[as.numeric(cut(poke_dat$weight,breaks = 10))]
+
+
+plot(weight~height,dat=poke_dat,col = poke_dat$col, main = 'Pokemon Weight vs Height Gen 1', pch=16)
+#this plot is fine but there are some outliers, so let's make a plot without them 
+
+
+poke_dat2<-subset(poke_dat, poke_dat$weight < 2000 & poke_dat$height < 30)
+poke_dat2$col <- col_spectrum(10)[as.numeric(cut(poke_dat2$weight,breaks = 10))]
+plot(weight~height,dat=poke_dat2,col = poke_dat2$col, pch=16, main = 'Pokemon Weight vs Height Gen 1')
+#this plot let's us focus in on the majority of the data points 
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+### Use the R package `rgbif` to obtain occurrence data for a species of your choosing. Calculate the spatial distance between all occurrence points in a pair-wise fashion. (10 pts)
+
+```{r}
+library(rgeos)
+library(rgbif)
+
+#getting oyster data from gbif.org
+oyster <- httr::GET('https://www.gbif.org/developer/species/Crassostrea+virginica')
+str(oyster)
+oyster <- rgbif::occ_search(scientificName = "Crassostrea virginica", 
+	limit = 1000) #testing to make sure it works 
+oyster2 <- rgbif::occ_search(scientificName = "Crassostrea virginica", 
+	limit = 5000, return='data')[[3]] #the data we are interested in including lat and long 
+
+
+#putting oyster data in data frame 
+oysters_dat<-data.frame(lat=oyster2$decimalLatitude, long=oyster2$decimalLongitude)
+
+oyster_matrix<-as.matrix(dist(oysters_dat[1:nrow(oysters_dat),], method='euclidean'))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### Write an R function that removes each value of a vector, calculates the mean of the modified vector, and then reports the overall mean and standard deviation of those vector means. (5 pts)
+
+
+```{r}
+
+vector <- sort(runif(10,-10,100))
+
+vec<- vector
+getMeans<- function(vec){
+  rm_vec<-list()
+  for (q in 1:length(vec)) { #removes each value of a vector
+    rm_vec[[q]]<-vec[!vec %in% vec[q]]
+  }
+  mean_vec<-list()
+  for (i in 1:length(rm_vec)) {
+    mean_vec[[i]]<-mean(rm_vec[[i]]) #calculates the mean of the modified vector
+  }
+  names(mean_vec)<-c(1:length(rm_vec))
+  meanTable<-ldply(mean_vec, data.frame)
+  names(meanTable)<-c('number','mean')
+  
+  answer<-cbind('mean'=mean(meanTable$mean), 'sd'=sd(meanTable$mean)) #mean and standard deviation of those vector means
+  return(answer)
+}
+getMeans(vec)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### Choose a software license that is one you would feel comfortable using and defend it's use over other licenses (5 pts)
+
+I personally like to use R and RStudio over any other statistics software because it is open-source. Another very popular statistics software is SAS, however this software is proprietary. I think R is the better software because of its open-source nature. Firstly, R and RStudio are free, which is a larger benefit than it may first appear. When witching universities as a graduate student, post-doc, or faculty member you never know what software will be available at each institution. Without a university license proprietary software like SAS may be prohibitively expensive. With R that is never a worry because it is free. Also, for anyone not associated with a university, using free software is more accessible. Therefore, scientists can share their work (including code) with anyone, and that person would have to power to implement that code. This also means that using R is more reproducible because anyone can access it. 
+
+In addition, R is superior to proprietary software like SAS because it's open-source nature mean a lot of people use it. Therefore, if you have any questions on how to do something in R, there is a high chance someone else has already asked the same question and others have answered that question online. This makes learning to use R and overcoming coding challenges easier than in a software like SAS. In addition, many free tutorials for how to use R exist, again lowering the barrier to entry. 
+
+Finally, because R is open-source, users can add packages to it which greatly expands what R can do. In software like SAS only the people who work at the SAS company can add additionally functionality and they may have good contact with their user-base. With R, the online user community is vocal and users have to ability to create packages and add them to R (with supervision by the core team of R engineers) greatly expanding functionality in a way that is user driven. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### Which of the following softwares are you likely to use in the future? (0 pts)
+
++ R  (yes)
++ git (yes)
++ R markdown (yes)
++ LaTeX (maybe)
++ SQL (no)
++ parallel computing packages (no)
++ Docker (no)
++ the tidyverse (yes)
++ a Linux OS (yes)
++ bash shell (yes)
+
+
+
+
+
+
+
+### What did you enjoy most about the course?
+
+I enjoyed getting better at coding and learning about new functionalities in R I didn't know about. 
+
+
+
+
+### What could be improved for future iterations (especially as it will be geared more exclusively towards undergraduates in the future)?
+
+I think the first 2 weeks should be dedicated to learning R basics or the class should require prerequisite knowledge of R. I also think if I topic is difficult, more than 1 week should be spent on it.Incorporating more in-class coding challenges would also be beneficial.
+
+
+
+
+
+
+
+
+
